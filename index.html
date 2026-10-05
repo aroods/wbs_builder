@@ -95,6 +95,11 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(300px,380px) 
 .branch-head .code{font-family:var(--mono);background:rgba(0,0,0,.18);padding:2px 8px;border-radius:4px;font-size:13px}
 .branch-head .lock{margin-left:auto;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;opacity:.65}
 .branch-body{padding:6px 14px 14px}
+.card .tag{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.06em;padding:2px 5px;border-radius:4px;flex:none;margin-top:2px;order:-1}
+.card.k-task{font-weight:600;border-left-width:8px}
+.card.k-task .tag{background:#1c2332;color:#fff}
+.card.k-sub{margin-left:16px;font-size:12.5px;background:#ebe4d0;border-left-width:3px}
+.card.k-sub .tag{border:1px solid #6b7488;color:#4a5366}
 button:disabled{opacity:.4;cursor:not-allowed}
 .branch.done{opacity:.75}
 .branch.done .branch-body{display:none}
@@ -134,7 +139,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .toast.show{opacity:1}
 html,body{height:100dvh}
 header{position:relative;flex-wrap:nowrap;gap:10px;padding:8px 10px}
-input.team{flex:1;min-width:0;width:auto;font-size:16px;padding:7px 9px}
+input.team{flex:1;min-width:64px;width:auto;font-size:16px;padding:7px 9px}
 .stat{display:flex;gap:4px;align-items:baseline;white-space:nowrap;font-size:12px;text-align:left}
 .stat b{display:inline;font-size:15px}
 header button{padding:7px 11px;white-space:nowrap}
@@ -179,6 +184,7 @@ button.round{border-radius:50%;width:32px;height:32px;padding:0;font-weight:700}
     <b id="stageName"></b>
     Place every card from the top list under this branch.
     <ul>
+      <li>Cards are labelled <b>TASK</b> (level 2, like 1.1) or <b>SUB-TASK</b> (level 3, like 1.1.1). Tasks are listed first.</li>
       <li><b>Drop on the branch</b> &rarr; work package (level 2).</li>
       <li><b>Drop on the middle of a work package</b> &rarr; its sub-task (level 3).</li>
       <li><b>Drop on the top / bottom edge of a card</b> &rarr; before / after it.</li>
@@ -250,12 +256,12 @@ REF.forEach((r,ri)=>{
   const rk = ROOTS[ri]; ROOT_TITLES[rk] = r[0];
   r[1].forEach(([t2,kids])=>{
     const id2 = 'n'+(++seq); nodes[id2] = {text:t2, ref:rk};
-    nodes[id2].root = rk;
-    kids.forEach(t3=>{ const id3 = 'n'+(++seq); nodes[id3] = {text:t3, ref:id2, root:rk}; });
+    nodes[id2].root = rk; nodes[id2].lvl = 1;   // lvl 1 = task (1.1), lvl 2 = sub-task (1.1.1)
+    kids.forEach(t3=>{ const id3 = 'n'+(++seq); nodes[id3] = {text:t3, ref:id2, root:rk, lvl:2}; });
   });
 });
 const ALL = Object.keys(nodes);
-const FACILITATOR = new URLSearchParams(location.search).has('facilitator');
+const FACILITATOR = new URLSearchParams(location.search).has('check');
 
 /* ---------- state ---------- */
 const KEY = 'wbs-builder-v2';
@@ -335,6 +341,10 @@ function cardEl(id, color, lvl){
   const c = document.createElement('div'); c.className='card'; c.dataset.id=id;
   c.style.setProperty('--c', color);
   if(lvl>0){ const code=document.createElement('span'); code.className='code'; code.textContent=codeOf(id); c.appendChild(code); }
+  else { // pool card: say what kind of item it is
+    c.classList.add(nodes[id].lvl===1 ? 'k-task' : 'k-sub');
+    const tag=document.createElement('span'); tag.className='tag'; tag.textContent = nodes[id].lvl===1 ? 'TASK' : 'SUB-TASK'; c.appendChild(tag);
+  }
   const t = document.createElement('span'); t.className='txt'; t.textContent = nodes[id].text; c.appendChild(t);
   if(lvl===1 && kids(id).length){ const k=document.createElement('span'); k.className='cnt'; k.textContent=kids(id).length+' sub'; c.appendChild(k); }
   if(checking && lvl>0){
@@ -355,7 +365,7 @@ function render(){
   // pool
   const pool = $('#pool'); pool.innerHTML='';
   const q = $('#search').value.trim().toLowerCase();
-  const sp = stagePool();
+  const sp = stagePool().sort((a,b)=>nodes[a].lvl-nodes[b].lvl);   // tasks first, then sub-tasks (stable)
   sp.forEach(id=>{
     const el = cardEl(id,ROOT_COLORS[S.stage],0);
     if(q && !nodes[id].text.toLowerCase().includes(q)) el.style.display='none';
@@ -368,14 +378,14 @@ function render(){
   $('#step').textContent = (S.stage+1)+'/'+ROOTS.length;
   $('#btnBack').style.display = S.stage>0 ? '' : 'none';
   const nb = $('#btnNext'); nb.disabled = sp.length>0;
-  nb.textContent = last ? 'Finish' : 'Done '+(S.stage+1)+'.0 →';
+  nb.textContent = last ? 'Finish' : 'Done →';
   // tree
   const tree = $('#tree'); tree.innerHTML='';
   tree.insertAdjacentHTML('beforeend','<h2><span>Work breakdown structure</span></h2>');
   if(checking){
-    let ok=0; ALL.forEach(id=>{ if(nodes[id].ref===P[id]) ok++; });
+    let ok=0, placed=0; ALL.forEach(id=>{ if(P[id]!=='pool'){ placed++; if(nodes[id].ref===P[id]) ok++; } });
     const b=document.createElement('div'); b.className='banner';
-    b.textContent=`Reference check: ${ok} of ${ALL.length} cards sit under the correct parent (order within a level is not scored).`;
+    b.textContent=`Check: ${ok} of ${placed} placed cards sit under the correct parent (order within a level is not scored). Press Check again to hide.`;
     tree.appendChild(b);
   }
   ROOTS.forEach((r,i)=>{
