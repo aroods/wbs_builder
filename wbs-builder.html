@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WBS Builder</title>
+<style>
+:root{
+  --ink:#0d1a2d; --ink2:#13253f; --ink3:#1b3252; --line:#2c4668;
+  --paper:#f5efe0; --paper-text:#1c2332; --muted:#8fa4c3; --accent:#ffd166;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  font-family:var(--sans);color:#e6eefb;background:var(--ink);
+  background-image:linear-gradient(var(--ink2) 1px,transparent 1px),linear-gradient(90deg,var(--ink2) 1px,transparent 1px);
+  background-size:28px 28px;display:flex;flex-direction:column;
+}
+header{
+  display:flex;align-items:center;gap:20px;padding:12px 20px;flex-wrap:wrap;
+  background:rgba(13,26,45,.94);border-bottom:1px solid var(--line);
+}
+h1{font-size:18px;margin:0;letter-spacing:.04em;text-transform:uppercase}
+h1 small{display:block;font-size:11px;color:var(--muted);letter-spacing:.02em;text-transform:none;font-weight:400;margin-top:2px}
+.sp{flex:1}
+.stat{font-family:var(--mono);font-size:13px;color:var(--muted);text-align:center;line-height:1.25}
+.stat b{display:block;font-size:20px;color:#fff;font-weight:600}
+input.team{
+  background:var(--ink2);border:1px solid var(--line);color:#fff;border-radius:6px;
+  padding:8px 10px;font:inherit;font-size:14px;width:220px;
+}
+input.team::placeholder{color:var(--muted)}
+button{
+  font:inherit;font-size:14px;cursor:pointer;border-radius:6px;padding:8px 14px;
+  border:1px solid var(--line);background:var(--ink3);color:#fff;
+}
+button:hover{border-color:var(--muted)}
+button.primary{background:var(--accent);color:#1b1500;border-color:var(--accent);font-weight:600}
+button.ghost{background:transparent}
+.help{
+  padding:8px 20px;font-size:13px;color:var(--muted);background:rgba(19,37,63,.85);
+  border-bottom:1px solid var(--line);line-height:1.5;
+}
+.help b{color:#fff;font-weight:600}
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(300px,380px) 1fr}
+.col{overflow:auto;padding:16px 18px 40px}
+.pool-col{border-right:1px solid var(--line);background:rgba(13,26,45,.7)}
+.col h2{
+  font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+  margin:0 0 10px;font-weight:600;display:flex;justify-content:space-between;align-items:center;
+}
+.search{
+  width:100%;margin-bottom:12px;background:var(--ink2);border:1px solid var(--line);
+  color:#fff;border-radius:6px;padding:7px 10px;font:inherit;font-size:13px;
+}
+/* cards */
+.node{margin:5px 0;border-radius:6px;transition:box-shadow .08s}
+.card{
+  --c:#9aa7bd;
+  display:flex;align-items:flex-start;gap:8px;
+  background:var(--paper);color:var(--paper-text);
+  border-radius:6px;border-left:5px solid var(--c);
+  padding:8px 10px;font-size:13.5px;line-height:1.35;cursor:grab;
+  box-shadow:0 1px 0 rgba(0,0,0,.3),0 2px 6px rgba(0,0,0,.25);
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
+}
+.card.ghost{position:fixed;z-index:50;pointer-events:none;opacity:.92;transform:rotate(-1.5deg);box-shadow:0 10px 24px rgba(0,0,0,.5);max-width:420px}
+.card:active{cursor:grabbing}
+.card .code{
+  font-family:var(--mono);font-size:11.5px;font-weight:700;color:#fff;background:var(--c);
+  padding:2px 6px;border-radius:4px;flex:none;margin-top:1px;
+}
+.card .txt{flex:1}
+.card .cnt{font-family:var(--mono);font-size:11px;color:#6b7488;flex:none;margin-top:2px}
+.card .mark{flex:none;font-weight:700;width:16px;text-align:center}
+.card.ok{background:#e1f5e6}.card.ok .mark{color:#1e8a3c}
+.card.bad{background:#fde5e5}.card.bad .mark{color:#c0392b}
+.node.dragging{opacity:.35}
+.node.t-before{box-shadow:0 -4px 0 var(--accent)}
+.node.t-after{box-shadow:0 4px 0 var(--accent)}
+.node.t-into>.card{outline:2px dashed var(--accent);outline-offset:2px}
+.kids{margin-left:26px;padding-left:12px;border-left:2px dashed var(--line);min-height:6px}
+.kids .card{font-size:13px;padding:6px 9px}
+/* branches */
+.branch{
+  margin-bottom:22px;border:1px solid var(--line);border-radius:10px;
+  background:rgba(19,37,63,.72);overflow:hidden;
+}
+.branch-head{
+  display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--c);color:#10151f;
+  font-weight:700;font-size:16px;
+}
+.branch-head .code{font-family:var(--mono);background:rgba(0,0,0,.18);padding:2px 8px;border-radius:4px;font-size:13px}
+.branch-head .lock{margin-left:auto;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;opacity:.65}
+.branch-body{padding:6px 14px 14px}
+button:disabled{opacity:.4;cursor:not-allowed}
+.branch.done{opacity:.75}
+.branch.done .branch-body{display:none}
+.branch.done.open .branch-body{display:block}
+.branch.done .branch-head{cursor:pointer}
+.branch.done .card{cursor:default}
+.branch.locked .branch-body{display:none}
+.branch.locked{opacity:.45}
+.branch.active{box-shadow:0 0 0 2px var(--c)}
+.dz{
+  border:2px dashed var(--line);border-radius:6px;color:var(--muted);font-size:12.5px;
+  text-align:center;padding:10px;margin-top:8px;
+}
+.dz.over{border-color:var(--accent);color:var(--accent);background:rgba(255,209,102,.07)}
+.pool-list{min-height:120px;padding-bottom:30px}
+.pool-list.over{outline:2px dashed var(--accent);outline-offset:4px;border-radius:6px}
+.empty{color:var(--muted);font-size:13px;padding:10px 2px}
+.banner{
+  background:var(--ink3);border:1px solid var(--accent);color:#fff;border-radius:8px;
+  padding:10px 14px;margin-bottom:16px;font-size:14px;
+}
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(5,10,20,.75);display:none;align-items:center;justify-content:center;z-index:10;padding:20px}
+.modal-bg.open{display:flex}
+.modal{
+  background:var(--ink2);border:1px solid var(--line);border-radius:12px;width:min(560px,100%);
+  max-height:90vh;overflow:auto;padding:22px;
+}
+.modal h3{margin:0 0 4px;font-size:20px}
+.modal p{color:var(--muted);font-size:13.5px;line-height:1.5}
+.sum{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+.sum div{background:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px;text-align:center;font-size:12px;color:var(--muted)}
+.sum b{display:block;font-family:var(--mono);font-size:22px;color:#fff;margin-bottom:2px}
+.warn{background:#3b2a12;border:1px solid #8a6420;color:#ffd9a0;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#fff;color:#111;padding:8px 14px;border-radius:6px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
+.toast.show{opacity:1}
+html,body{height:100dvh}
+header{position:relative;flex-wrap:nowrap;gap:10px;padding:8px 10px}
+input.team{flex:1;min-width:0;width:auto;font-size:16px;padding:7px 9px}
+.stat{display:flex;gap:4px;align-items:baseline;white-space:nowrap;font-size:12px;text-align:left}
+.stat b{display:inline;font-size:15px}
+header button{padding:7px 11px;white-space:nowrap}
+button.round{border-radius:50%;width:32px;height:32px;padding:0;font-weight:700}
+.help{position:absolute;top:100%;left:0;right:0;z-index:30;padding:14px 16px;font-size:14px;line-height:1.5;
+  background:var(--ink2);border:0;border-bottom:2px solid var(--accent);color:#e6eefb;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+.help[hidden]{display:none}
+.help ul{margin:8px 0 12px;padding-left:18px;color:var(--muted)}
+.help li{margin:3px 0}
+.kids{min-height:10px;padding-bottom:3px}
+@media (min-width:821px){.help{left:auto;width:460px;right:10px;border:1px solid var(--line);border-radius:0 0 10px 10px}}
+@media (max-width:820px){
+  .wide,.search,.col h2{display:none}
+  main{grid-template-columns:1fr;grid-template-rows:38% 62%}
+  .col{padding:8px 8px 60px}
+  .pool-col{border-right:0;border-bottom:2px solid var(--line)}
+  .pool-list{min-height:60px;padding-bottom:40px}
+  .node{margin:4px 0}
+  .card{font-size:13px;padding:7px 8px;gap:6px}
+  .kids .card{font-size:12.5px;padding:6px 8px}
+  .card .code{font-size:10.5px;padding:1px 5px}
+  .kids{margin-left:12px;padding-left:8px}
+  .branch{margin-bottom:10px}
+  .branch-head{padding:8px 10px;font-size:14px}
+  .branch-body{padding:2px 8px 8px}
+  .branch.done .branch-body{display:none}
+  .dz{padding:16px 10px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="wide">WBS Builder</h1>
+  <input class="team" id="team" placeholder="Album no." maxlength="60" inputmode="numeric" autocomplete="off">
+  <div class="stat"><b id="step">1/4</b></div>
+  <div class="stat">✓ <b id="placed">0/0</b></div>
+  <button id="btnCheck" class="ghost" style="display:none">Check</button>
+  <button id="btnHelp" class="ghost round" aria-label="How it works">?</button>
+  <button id="btnBack" class="ghost" aria-label="Back to previous branch" title="Back to previous branch" style="display:none">←</button>
+  <button id="btnNext" class="primary">Done</button>
+  <div class="help" id="help" hidden>
+    <b id="stageName"></b>
+    Place every card from the top list under this branch.
+    <ul>
+      <li><b>Drop on the branch</b> &rarr; work package (level 2).</li>
+      <li><b>Drop on the middle of a work package</b> &rarr; its sub-task (level 3).</li>
+      <li><b>Drop on the top / bottom edge of a card</b> &rarr; before / after it.</li>
+      <li>A work package moves with its sub-tasks. Drag a card back to the list to undo.</li>
+      <li>On touch: press and hold a card briefly, then drag. Swipe normally to scroll.</li>
+      <li>When the list is empty, press Done. Finished branches are locked.</li>
+    </ul>
+    <button class="primary" id="btnHelpOk">Got it</button>
+  </div>
+</header>
+<main>
+  <section class="col pool-col">
+    <h2><span>Task pool</span><span id="poolCount"></span></h2>
+    <input class="search" id="search" placeholder="Filter cards…">
+    <div class="pool-list dz" id="pool" data-parent="pool" style="border:0;padding:0;margin:0;text-align:left"></div>
+  </section>
+  <section class="col" id="tree"></section>
+</main>
+
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h3>Your WBS</h3>
+    <p id="mTeam"></p>
+    <div class="sum">
+      <div><b id="mTime">–</b>time</div>
+      <div><b id="mPlaced">–</b>cards placed</div>
+      <div><b id="mMoves">–</b>moves</div>
+    </div>
+    <div class="warn" id="mWarn" style="display:none"></div>
+    <p>Download the file and send it to your instructor. CSV opens directly in Excel.</p>
+    <div class="btns">
+      <button class="primary" id="dlCsv">Download CSV (Excel)</button>
+      <button id="dlJson">Download JSON</button>
+      <button id="cpTxt">Copy as text</button>
+      <button class="ghost" id="mClose">Back to editing</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- reference structure (the answer key) ---------- */
+const REF = [
+ ['Project Management',[
+  ['Project Initiation',['Develop Project Charter','Identify Stakeholders & Define Roles (RACI Chart)','Initial Project Kick-off Meeting']],
+  ['Project Planning',['Create Detailed Project Plan & Schedule','Develop Work Breakdown Structure (this document)','Perform PERT/CPM Analysis for Timeline','Identify Risks & Develop Risk Mitigation Plan','Prepare & Present Project Plan (to Instructor/Class)']],
+  ['Project Execution & Control',['Conduct Sprint Planning Meetings','Hold Regular Team Status Meetings','Track Progress Against Plan','Manage Risks & Issues']],
+  ['Project Closure',['Conduct Final Sprint Review & Retrospective','Archive Project Documents','Prepare Final Project Report/Summary']]]],
+ ['Research & Data Collection',[
+  ['Define Data Requirements',['Finalize Key Metrics for AI Adoption','Specify Comparison Countries (e.g., Denmark, Finland)','Define Time Period for Analysis']],
+  ['Gather Eurostat Data',['Locate "Use of AI in Enterprises" Dataset','Extract Relevant Data for Poland','Extract Relevant Data for Comparison Countries']],
+  ['Gather GUS Data',['Locate "Information Society in Poland" Reports','Identify Relevant Sections on ICT/AI in Enterprises','Extract Key Statistics and Qualitative Information']],
+  ['Data Preparation',['Consolidate Data into a Master File','Clean Data (Handle missing values, inconsistencies)','Normalize Data for Accurate Comparison (e.g., check definitions)']]]],
+ ['Data Analysis & Interpretation',[
+  ['Descriptive Analysis of Polish Enterprises',['Calculate AI Adoption Rates by Technology Type (ML, NLP, etc.)','Analyze Adoption by Enterprise Size/Sector (if data available)','Identify Trends in AI Adoption in Poland Over Time']],
+  ['Comparative Analysis',["Compare Poland's Overall AI Adoption Rate to EU Leaders",'Benchmark Specific AI Technology Adoption vs. EU Leaders','Identify Key Gaps in Adoption Rates']],
+  ['Synthesis of Findings',['Identify Strategic Opportunities for Polish Enterprises','Formulate Key Insights and Conclusions','Identify Limitations of the Analysis']]]],
+ ['Deliverables Creation',[
+  ['Develop Data Visualizations',['Create Bar Charts for Country Comparisons','Create Line Charts for Trends Over Time','Design Tables to Summarize Key Data Points']],
+  ['Create Final Presentation',['Draft Presentation Outline','Develop Content for Each Section (Intro, Methods, Findings, Conclusion)','Integrate Graphs, Tables, and Key Insights','Rehearse and Refine Presentation','Deliver Final Results Presentation in Front of Class']],
+  ['Write Summary Report',['Draft Executive Summary','Write Detailed Analysis and Findings','Compile Appendices (Data sources, detailed tables)']]]]
+];
+const ROOTS = ['r1','r2','r3','r4'];
+const ROOT_COLORS = ['#4cc9b0','#ffb454','#b794f6','#ff7a8a'];
+const ROOT_TITLES = {};
+const nodes = {};           // id -> {text, ref}   ref = id of the correct parent
+let seq = 0;
+REF.forEach((r,ri)=>{
+  const rk = ROOTS[ri]; ROOT_TITLES[rk] = r[0];
+  r[1].forEach(([t2,kids])=>{
+    const id2 = 'n'+(++seq); nodes[id2] = {text:t2, ref:rk};
+    nodes[id2].root = rk;
+    kids.forEach(t3=>{ const id3 = 'n'+(++seq); nodes[id3] = {text:t3, ref:id2, root:rk}; });
+  });
+});
+const ALL = Object.keys(nodes);
+const FACILITATOR = new URLSearchParams(location.search).has('facilitator');
+
+/* ---------- state ---------- */
+const KEY = 'wbs-builder-v2';
+let S;      // {K, seed, team (album no.), startedAt, finishedAt, moves, stage, stageTimes}
+let P = {}; // id -> parent key
+let dragId = null, checking = false;
+const openBranches = new Set();   // finished branches the student has expanded to look at
+
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function freshState(){
+  const seed = Math.floor(Math.random()*1e9), rnd = mulberry(seed), pool = ALL.slice();
+  for(let i=pool.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]]}
+  const K = {pool}; ROOTS.forEach(r=>K[r]=[]); ALL.forEach(id=>K[id]=[]);
+  return {K, seed, team:'', startedAt:null, finishedAt:null, moves:0, stage:0, stageTimes:[]};
+}
+function load(){
+  try{
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if(s && s.K){
+      const seen = [].concat(s.K.pool, ...ROOTS.map(r=>s.K[r]||[]), ...ALL.map(i=>s.K[i]||[]));
+      if(seen.length===ALL.length && new Set(seen).size===ALL.length) return s;
+    }
+  }catch(e){}
+  return freshState();
+}
+function save(){ try{localStorage.setItem(KEY, JSON.stringify(S))}catch(e){} }
+function rebuildParents(){
+  P = {};
+  Object.keys(S.K).forEach(k=>S.K[k].forEach(c=>P[c]=k));
+}
+const kids = id => S.K[id]||[];
+const isRoot = k => ROOTS.includes(k);
+const activeRoot = () => ROOTS[S.stage];
+function branchOf(id){ let p=P[id]; while(p && p!=='pool' && !isRoot(p)) p=P[p]; return p; }
+const stagePool = () => S.K.pool.filter(id=>nodes[id].root===activeRoot());
+const stageTotal = () => ALL.filter(id=>nodes[id].root===activeRoot()).length;
+function level(id){ const p=P[id]; return p==='pool'?0 : isRoot(p)?1 : level(p)+1; }
+function descendants(id){ return kids(id).flatMap(c=>[c,...descendants(c)]); }
+function isDesc(id, anc){ return descendants(anc).includes(id); }
+
+/* ---------- moves ---------- */
+function canMove(id, parent){
+  if(P[id]!=='pool' && branchOf(id)!==activeRoot()) return false;   // finished branches are locked
+  if(parent==='pool') return true;
+  if(id===parent || isDesc(parent,id)) return false;
+  if(isRoot(parent)) return parent===activeRoot() && nodes[id].root===parent;   // becomes level 1 (work package)
+  if(P[parent]===undefined || P[parent]==='pool' || branchOf(parent)!==activeRoot()) return false;
+  return level(parent)===1 && kids(id).length===0 && nodes[id].root===activeRoot(); // becomes level 2 (sub-task), needs to be a leaf
+}
+function move(id, parent, index){
+  const old = P[id], arr = S.K[old], oi = arr.indexOf(id);
+  arr.splice(oi,1);
+  if(old===parent && oi<index) index--;
+  if(parent==='pool'){
+    const flat = [id, ...descendants(id)];
+    flat.forEach(x=>S.K[x]=[]);
+    S.K.pool.splice(index,0,...flat);
+  } else {
+    S.K[parent].splice(index,0,id);
+  }
+  if(!S.startedAt) S.startedAt = Date.now();
+  S.finishedAt = null; S.moves++; checking = false;
+  save(); render();
+}
+
+/* ---------- numbering ---------- */
+function codeOf(id){
+  const p = P[id]; if(p==='pool') return '';
+  if(isRoot(p)) return (ROOTS.indexOf(p)+1)+'.'+(S.K[p].indexOf(id)+1);
+  return codeOf(p)+'.'+(S.K[p].indexOf(id)+1);
+}
+
+/* ---------- render ---------- */
+const $ = s => document.querySelector(s);
+function cardEl(id, color, lvl){
+  const n = document.createElement('div'); n.className='node'; n.dataset.id=id;
+  const c = document.createElement('div'); c.className='card'; c.dataset.id=id;
+  c.style.setProperty('--c', color);
+  if(lvl>0){ const code=document.createElement('span'); code.className='code'; code.textContent=codeOf(id); c.appendChild(code); }
+  const t = document.createElement('span'); t.className='txt'; t.textContent = nodes[id].text; c.appendChild(t);
+  if(lvl===1 && kids(id).length){ const k=document.createElement('span'); k.className='cnt'; k.textContent=kids(id).length+' sub'; c.appendChild(k); }
+  if(checking && lvl>0){
+    const ok = nodes[id].ref===P[id];
+    c.classList.add(ok?'ok':'bad');
+    const m=document.createElement('span'); m.className='mark'; m.textContent=ok?'✓':'✗'; c.appendChild(m);
+  }
+  n.appendChild(c);
+  if(lvl===1){
+    const kc = document.createElement('div'); kc.className='kids';
+    kids(id).forEach(k=>kc.appendChild(cardEl(k,color,2)));
+    n.appendChild(kc);
+  }
+  return n;
+}
+function render(){
+  rebuildParents();
+  // pool
+  const pool = $('#pool'); pool.innerHTML='';
+  const q = $('#search').value.trim().toLowerCase();
+  const sp = stagePool();
+  sp.forEach(id=>{
+    const el = cardEl(id,ROOT_COLORS[S.stage],0);
+    if(q && !nodes[id].text.toLowerCase().includes(q)) el.style.display='none';
+    pool.appendChild(el);
+  });
+  const last = S.stage===ROOTS.length-1;
+  if(!sp.length){ pool.innerHTML='<div class="empty">All cards for this branch are placed. Review the structure, then press '+(last?'Finish &amp; export.':'Next.')+'</div>'; }
+  $('#poolCount').textContent = sp.length+' left';
+  $('#stageName').textContent = 'Step '+(S.stage+1)+' of '+ROOTS.length+': '+(S.stage+1)+'.0 '+ROOT_TITLES[activeRoot()]+'.';
+  $('#step').textContent = (S.stage+1)+'/'+ROOTS.length;
+  $('#btnBack').style.display = S.stage>0 ? '' : 'none';
+  const nb = $('#btnNext'); nb.disabled = sp.length>0;
+  nb.textContent = last ? 'Finish' : 'Done '+(S.stage+1)+'.0 →';
+  // tree
+  const tree = $('#tree'); tree.innerHTML='';
+  tree.insertAdjacentHTML('beforeend','<h2><span>Work breakdown structure</span></h2>');
+  if(checking){
+    let ok=0; ALL.forEach(id=>{ if(nodes[id].ref===P[id]) ok++; });
+    const b=document.createElement('div'); b.className='banner';
+    b.textContent=`Reference check: ${ok} of ${ALL.length} cards sit under the correct parent (order within a level is not scored).`;
+    tree.appendChild(b);
+  }
+  ROOTS.forEach((r,i)=>{
+    const st = i<S.stage ? 'done' : i===S.stage ? 'active' : 'locked';
+    const br = document.createElement('div'); br.className='branch '+st+(st==='done'&&openBranches.has(i)?' open':''); br.style.setProperty('--c',ROOT_COLORS[i]);
+    br.dataset.idx = i;
+    br.innerHTML = `<div class="branch-head"><span class="code">${i+1}.0</span><span></span><span class="lock">${st==='done'?(openBranches.has(i)?'done ✓ ▴':'done ✓ ▾'):st==='active'?'working on it':'locked'}</span></div><div class="branch-body"></div>`;
+    br.querySelector('.branch-head span:nth-child(2)').textContent = ROOT_TITLES[r];
+    const body = br.querySelector('.branch-body');
+    S.K[r].forEach(id=>body.appendChild(cardEl(id,ROOT_COLORS[i],1)));
+    if(st==='active'){
+      const dz = document.createElement('div'); dz.className='dz'; dz.dataset.parent=r;
+      dz.textContent = S.K[r].length ? 'Drop here to add a work package at the end' : 'Drop work packages (level 2) for '+ROOT_TITLES[r];
+      body.appendChild(dz);
+    }
+    tree.appendChild(br);
+  });
+  $('#placed').textContent = (stageTotal()-sp.length)+'/'+stageTotal();
+}
+function fmt(ms){ const s=Math.floor(ms/1000); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
+function elapsed(){ return S.startedAt ? (S.finishedAt||Date.now())-S.startedAt : 0; }
+function tick(){}
+
+/* ---------- drag & drop ---------- */
+function computeDrop(cardNode, e){
+  const id = cardNode.dataset.id, p = P[id], lvl = level(id);
+  const r = cardNode.querySelector('.card').getBoundingClientRect();
+  const f = (e.clientY - r.top)/r.height;
+  if(lvl===1 && f>.2 && f<.8 && canMove(dragId,id)) return {parent:id, index:kids(id).length, el:cardNode, mode:'into'};
+  const after = f>=.5;
+  return {parent:p, index:S.K[p].indexOf(id)+(after?1:0), el:cardNode, mode:after?'after':'before'};
+}
+function resolve(e){
+  const card = e.target.closest('.node');
+  if(card && !e.target.closest('.dz')){
+    // innermost node under the pointer
+    const id = card.dataset.id;
+    if(id===dragId || isDesc(id,dragId)) return null;
+    // pointer in the empty space of a work package's sub-task area -> add as its sub-task
+    if(e.target.classList.contains('kids')) return canMove(dragId,id) ? {parent:id,index:kids(id).length,el:card,mode:'into'} : null;
+    const d = computeDrop(card,e);
+    return canMove(dragId,d.parent) ? d : null;
+  }
+  const dz = e.target.closest('.dz');
+  if(dz){ const p=dz.dataset.parent; return canMove(dragId,p) ? {parent:p,index:S.K[p].length,el:dz,mode:'dz'} : null; }
+  return null;
+}
+function clearT(){
+  document.querySelectorAll('.t-before,.t-after,.t-into,.over').forEach(el=>el.classList.remove('t-before','t-after','t-into','over'));
+}
+/* Pointer-based drag: works with mouse, touch and pen (HTML5 DnD does not work on most tablets). */
+let pend = null, ghost = null, lastPt = {x:0,y:0}, scrollTimer = null;
+// on touch the ghost card floats above the finger so it stays visible; the drop target is under the ghost
+const GHOST_LIFT = 62;
+const hitPt = () => ({x:lastPt.x, y:lastPt.y - (pend && pend.touch ? GHOST_LIFT : 0)});
+function targetAt(x, y){
+  const el = document.elementFromPoint(x, y);
+  if(!el) return null;
+  return resolve({target:el, clientY:y});
+}
+function startDrag(){
+  const c = pend.card; dragId = pend.id; pend.started = true;
+  ghost = c.cloneNode(true); ghost.className += ' ghost'; ghost.style.width = c.offsetWidth+'px';
+  document.body.appendChild(ghost);
+  c.closest('.node').classList.add('dragging');
+  scrollTimer = setInterval(autoScroll, 30);
+  placeGhost();
+}
+function placeGhost(){
+  if(!ghost) return;
+  const h = hitPt();
+  const w = ghost.offsetWidth, left = Math.min(Math.max(4, h.x - w/2), innerWidth - w - 4);
+  ghost.style.left = left+'px'; ghost.style.top = (h.y - 16)+'px';
+}
+function autoScroll(){
+  const h = hitPt();
+  const el = document.elementFromPoint(h.x,h.y); const col = el && el.closest('.col'); if(!col) return;
+  const r = col.getBoundingClientRect(), z = 56;
+  if(h.y < r.top+z) col.scrollTop -= 12; else if(h.y > r.bottom-z) col.scrollTop += 12;
+}
+function endDrag(drop){
+  clearTimeout(pend && pend.timer); clearInterval(scrollTimer);
+  const hp = hitPt(), id = dragId, d = drop && dragId ? targetAt(hp.x,hp.y) : null;
+  if(ghost){ ghost.remove(); ghost=null; }
+  clearT(); document.querySelectorAll('.dragging').forEach(n=>n.classList.remove('dragging'));
+  pend = null; dragId = null;
+  if(d) move(id, d.parent, d.index);
+}
+document.addEventListener('pointerdown', e=>{
+  if(e.button>0 || pend) return;
+  const card = e.target.closest('.card'); if(!card) return;
+  const cid = card.dataset.id;
+  if(P[cid]!=='pool' && branchOf(cid)!==activeRoot()) return;   // locked branch
+  pend ={id:card.dataset.id, card, x:e.clientX, y:e.clientY, pid:e.pointerId, touch:e.pointerType!=='mouse', started:false};
+  lastPt = {x:e.clientX,y:e.clientY};
+  if(pend.touch) pend.timer = setTimeout(()=>{ if(pend && !pend.started){ startDrag(); if(navigator.vibrate) navigator.vibrate(15); } }, 170);
+});
+document.addEventListener('pointermove', e=>{
+  if(!pend || e.pointerId!==pend.pid) return;
+  lastPt = {x:e.clientX,y:e.clientY};
+  if(!pend.started){
+    const moved = Math.hypot(e.clientX-pend.x, e.clientY-pend.y);
+    if(pend.touch){ if(moved>10){ clearTimeout(pend.timer); pend=null; } return; }  // finger moved first = user is scrolling
+    if(moved>4) startDrag(); else return;
+  }
+  placeGhost(); clearT();
+  const hp = hitPt(), d = targetAt(hp.x,hp.y);
+  if(d) d.el.classList.add(d.mode==='dz'?'over':'t-'+d.mode);
+});
+document.addEventListener('pointerup', e=>{ if(pend && e.pointerId===pend.pid){ pend.started ? endDrag(true) : (clearTimeout(pend.timer), pend=null); } });
+document.addEventListener('pointercancel', e=>{ if(pend && e.pointerId===pend.pid){ pend.started ? endDrag(false) : (clearTimeout(pend.timer), pend=null); } });
+// once a touch drag is active, stop the page from scrolling under the finger
+document.addEventListener('touchmove', e=>{ if(pend && pend.started) e.preventDefault(); }, {passive:false});
+document.addEventListener('contextmenu', e=>{ if(e.target.closest('.card')) e.preventDefault(); });
+
+/* ---------- export ---------- */
+function flatRows(){
+  const rows = [];
+  ROOTS.forEach((r,i)=>{
+    rows.push({code:(i+1)+'.0', level:0, task:ROOT_TITLES[r]});
+    S.K[r].forEach(a=>{
+      rows.push({code:codeOf(a), level:1, task:nodes[a].text});
+      S.K[a].forEach(b=>rows.push({code:codeOf(b), level:2, task:nodes[b].text}));
+    });
+  });
+  return rows;
+}
+const csvq = v => '"'+String(v).replace(/"/g,'""')+'"';
+function buildCsv(){
+  const L = [];
+  L.push(['Album number',S.team||''].map(csvq).join(';'));
+  L.push(['Time',fmt(elapsed())].map(csvq).join(';'));
+  L.push(['Time per branch',S.stageTimes.map((t,i)=>(i+1)+'.0 '+fmt(t-(S.stageTimes[i-1]||0))).join(' | ')].map(csvq).join(';'));
+  L.push(['Moves',S.moves].map(csvq).join(';'));
+  L.push(['Cards placed',(ALL.length-S.K.pool.length)+'/'+ALL.length].map(csvq).join(';'));
+  L.push('');
+  L.push(['WBS code','Level','Task'].map(csvq).join(';'));
+  flatRows().forEach(r=>L.push([r.code,r.level+1,r.task].map(csvq).join(';')));
+  S.K.pool.forEach(id=>L.push(['', 'UNPLACED', nodes[id].text].map(csvq).join(';')));
+  return '﻿'+L.join('\r\n');
+}
+function buildText(){
+  const out = [];
+  flatRows().forEach(r=>out.push('    '.repeat(r.level)+r.code+' '+r.task));
+  if(S.K.pool.length){ out.push('','UNPLACED:'); S.K.pool.forEach(id=>out.push('  - '+nodes[id].text)); }
+  return out.join('\n');
+}
+function buildJson(){
+  return JSON.stringify({album_number:S.team, time_seconds:Math.round(elapsed()/1000), seconds_per_branch:S.stageTimes.map((t,i)=>Math.round((t-(S.stageTimes[i-1]||0))/1000)), moves:S.moves,
+    placed:ALL.length-S.K.pool.length, total:ALL.length, wbs:flatRows(), unplaced:S.K.pool.map(id=>nodes[id].text)}, null, 2);
+}
+function download(name, mime, content){
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([content],{type:mime}));
+  a.download=name; document.body.appendChild(a); a.click(); a.remove();
+}
+const slug = () => (S.team||'album').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'album';
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
+
+/* ---------- wiring ---------- */
+$('#team').addEventListener('input', e=>{ S.team=e.target.value; save(); });
+$('#search').addEventListener('input', render);
+$('#btnBack').onclick = ()=>{
+  if(S.stage===0) return;
+  S.stage--; S.stageTimes.length = S.stage; S.finishedAt = null; openBranches.clear();
+  save(); render();
+  toast('Back to '+(S.stage+1)+'.0 – branch unlocked');
+};
+$('#tree').addEventListener('click', e=>{
+  const head = e.target.closest('.branch.done .branch-head'); if(!head) return;
+  const i = +head.parentElement.dataset.idx;
+  openBranches.has(i) ? openBranches.delete(i) : openBranches.add(i);
+  render();
+});
+$('#btnHelp').onclick = ()=>{ const h=$('#help'); h.hidden = !h.hidden; };
+$('#btnHelpOk').onclick = ()=>{ $('#help').hidden = true; try{localStorage.setItem('wbs-help-seen','1')}catch(e){} };
+if(new URLSearchParams(location.search).has('reset')){ try{localStorage.removeItem(KEY)}catch(e){} }
+try{ if(!localStorage.getItem('wbs-help-seen')) $('#help').hidden = false; }catch(e){ $('#help').hidden = false; }
+$('#btnNext').onclick = ()=>{
+  if(stagePool().length) return;
+  S.stageTimes[S.stage] = elapsed();
+  if(S.stage < ROOTS.length-1){
+    S.stage++; save(); render();
+    $('#tree').scrollTop = 0; $('.pool-col').scrollTop = 0;
+    toast('Branch '+S.stage+'.0 locked. Now: '+(S.stage+1)+'.0 '+ROOT_TITLES[activeRoot()]);
+    return;
+  }
+  finish();
+};
+function finish(){
+  if(!S.startedAt) S.startedAt = Date.now();
+  S.finishedAt = Date.now(); save(); tick();
+  $('#mTeam').textContent = S.team ? 'Album number: '+S.team : 'No album number entered.';
+  $('#mTime').textContent = fmt(elapsed());
+  $('#mPlaced').textContent = (ALL.length-S.K.pool.length)+'/'+ALL.length;
+  $('#mMoves').textContent = S.moves;
+  const w = $('#mWarn');
+  if(S.K.pool.length){ w.style.display='block'; w.textContent = S.K.pool.length+' card(s) are still in the pool and will be exported as UNPLACED.'; } else w.style.display='none';
+  $('#modal').classList.add('open');
+}
+$('#mClose').onclick = ()=>{ $('#modal').classList.remove('open'); S.finishedAt=null; save(); };
+$('#dlCsv').onclick = ()=>download('wbs-'+slug()+'.csv','text/csv;charset=utf-8',buildCsv());
+$('#dlJson').onclick = ()=>download('wbs-'+slug()+'.json','application/json',buildJson());
+$('#cpTxt').onclick = ()=>navigator.clipboard.writeText(buildText()).then(()=>toast('Copied to clipboard'),()=>toast('Copy failed'));
+if(FACILITATOR){
+  const b=$('#btnCheck'); b.style.display=''; b.onclick=()=>{ checking=!checking; render(); };
+}
+
+S = load();
+S.stage = S.stage||0; S.stageTimes = S.stageTimes||[];
+$('#team').value = S.team||'';
+render();
+</script>
+</body>
+</html>
