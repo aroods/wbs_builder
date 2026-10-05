@@ -77,6 +77,7 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(300px,380px) 
 .card .mark{flex:none;font-weight:700;width:16px;text-align:center}
 .card.ok{background:#e1f5e6}.card.ok .mark{color:#1e8a3c}
 .card.bad{background:#fde5e5}.card.bad .mark{color:#c0392b}
+.card.ord{background:#fff0d1}.card.ord .mark{color:#b9770e}
 .node.dragging{opacity:.35}
 .node.t-before{box-shadow:0 -4px 0 var(--accent)}
 .node.t-after{box-shadow:0 4px 0 var(--accent)}
@@ -250,14 +251,16 @@ const REF = [
 const ROOTS = ['r1','r2','r3','r4'];
 const ROOT_COLORS = ['#4cc9b0','#ffb454','#b794f6','#ff7a8a'];
 const ROOT_TITLES = {};
-const nodes = {};           // id -> {text, ref}   ref = id of the correct parent
+const nodes = {};           // id -> {text, ref, root, lvl, ord}   ref = id of the correct parent, ord = correct position among siblings
+const ordCnt = {};
 let seq = 0;
 REF.forEach((r,ri)=>{
   const rk = ROOTS[ri]; ROOT_TITLES[rk] = r[0];
   r[1].forEach(([t2,kids])=>{
     const id2 = 'n'+(++seq); nodes[id2] = {text:t2, ref:rk};
     nodes[id2].root = rk; nodes[id2].lvl = 1;   // lvl 1 = task (1.1), lvl 2 = sub-task (1.1.1)
-    kids.forEach(t3=>{ const id3 = 'n'+(++seq); nodes[id3] = {text:t3, ref:id2, root:rk, lvl:2}; });
+    nodes[id2].ord = (ordCnt[rk] = (ordCnt[rk]||0)+1);   // position among siblings in the reference
+    kids.forEach(t3=>{ const id3 = 'n'+(++seq); nodes[id3] = {text:t3, ref:id2, root:rk, lvl:2, ord:(ordCnt[id2] = (ordCnt[id2]||0)+1)}; });
   });
 });
 const ALL = Object.keys(nodes);
@@ -348,9 +351,10 @@ function cardEl(id, color, lvl){
   const t = document.createElement('span'); t.className='txt'; t.textContent = nodes[id].text; c.appendChild(t);
   if(lvl===1 && kids(id).length){ const k=document.createElement('span'); k.className='cnt'; k.textContent=kids(id).length+' sub'; c.appendChild(k); }
   if(checking && lvl>0){
-    const ok = nodes[id].ref===P[id];
-    c.classList.add(ok?'ok':'bad');
-    const m=document.createElement('span'); m.className='mark'; m.textContent=ok?'✓':'✗'; c.appendChild(m);
+    const st = cardState(id);
+    c.classList.add(st);
+    const m=document.createElement('span'); m.className='mark'; m.textContent = st==='ok'?'✓' : st==='ord'?'↕' : '✗';
+    m.title = st==='ok'?'Correct' : st==='ord'?'Right parent, wrong order' : 'Wrong parent'; c.appendChild(m);
   }
   n.appendChild(c);
   if(lvl===1){
@@ -360,8 +364,30 @@ function cardEl(id, color, lvl){
   }
   return n;
 }
+// Order check: among siblings that have the right parent, the largest set already in reference
+// order (longest increasing subsequence) is OK; the rest are "out of order". So one misplaced
+// card is flagged on its own and does not turn its neighbours red.
+let orderOk = new Set();
+function computeOrder(){
+  orderOk = new Set();
+  Object.keys(S.K).forEach(p=>{
+    if(p==='pool') return;
+    const a = S.K[p].filter(id=>nodes[id].ref===p), n = a.length;
+    if(!n) return;
+    const len = Array(n).fill(1), prev = Array(n).fill(-1);
+    for(let i=0;i<n;i++) for(let j=0;j<i;j++)
+      if(nodes[a[j]].ord < nodes[a[i]].ord && len[j]+1 > len[i]){ len[i]=len[j]+1; prev[i]=j; }
+    let best = 0; for(let i=1;i<n;i++) if(len[i]>len[best]) best=i;
+    for(let i=best;i>=0;i=prev[i]) orderOk.add(a[i]);
+  });
+}
+function cardState(id){
+  if(nodes[id].ref!==P[id]) return 'bad';
+  return orderOk.has(id) ? 'ok' : 'ord';
+}
 function render(){
   rebuildParents();
+  if(checking) computeOrder();
   // pool
   const pool = $('#pool'); pool.innerHTML='';
   const q = $('#search').value.trim().toLowerCase();
@@ -383,9 +409,10 @@ function render(){
   const tree = $('#tree'); tree.innerHTML='';
   tree.insertAdjacentHTML('beforeend','<h2><span>Work breakdown structure</span></h2>');
   if(checking){
-    let ok=0, placed=0; ALL.forEach(id=>{ if(P[id]!=='pool'){ placed++; if(nodes[id].ref===P[id]) ok++; } });
+    let parentOk=0, full=0, placed=0;
+    ALL.forEach(id=>{ if(P[id]!=='pool'){ placed++; const s=cardState(id); if(s!=='bad') parentOk++; if(s==='ok') full++; } });
     const b=document.createElement('div'); b.className='banner';
-    b.textContent=`Check: ${ok} of ${placed} placed cards sit under the correct parent (order within a level is not scored). Press Check again to hide.`;
+    b.textContent=`Check: ${full} of ${placed} placed cards are fully correct. ${parentOk} sit under the right parent; ✗ = wrong parent, ↕ = right parent but wrong order. Press Check again to hide.`;
     tree.appendChild(b);
   }
   ROOTS.forEach((r,i)=>{
